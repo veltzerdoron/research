@@ -1,0 +1,16 @@
+- understand STS code analysis
+
+* Change quantifiers to add option for non conventional ones and do some work there
+* Compare natural quantifier multi learning to general quantifiers and see general accuracy
+* do generalization tests on STS and make my code run complete with one
+* read the last paper and peruse Keenan, STS & Chemla
+* write abstract for Rony
+* rewrite my models pdf
+
+2 weeks
+
+* 
+
+
+***
+* run this on random world/ general quantifier world/natural quantifier world to tease apart the effects of the world and that of the "computation cognitive bias".
