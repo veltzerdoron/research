@@ -1,13 +1,10 @@
-# Create quantifier python package and upload it to github as part of this research project
-
 STS:
 V- understand STS code + analysis
 * do generalization and length tests for STS
 * reread Keenan, STS & Chemla and Quantifier acquisition
 
 Urgent:
-V- quant.py classes
-V- model.py class
+
 V- CNN, DNN version of NN
 V- confusion matrix metrics
    Conv1D usage is not very efficient on GPU moved to CPU
@@ -20,16 +17,12 @@ V- wrote code for teacher student
 V- read CNN biological plausibility papers
     - More papers to print and read tomorrow
 V* rewrote my models pdf
-V- write abstract for Rony and get back in contact
+V- wrote abstract for Rony and get back in contact
 
-V* another code cleanup + add min max scene len and multinomial distribution generation
-* add code option to generate limited lengthes of scenes
 * do generalization tests on my models
 
 * analysis of model weight values after training (Conv + Dense)
-* keep quantifier order (and debug the quantifiers)
 
 Future ideas:
 *** check if the classifier can learn non conservative quantifiers
 *** run this on random world/ general quantifier world/natural quantifier world to tease apart the effects of the world and that of the "computation cognitive bias".
-*** do generalization and length tests on STS
