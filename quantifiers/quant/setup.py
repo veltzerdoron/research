@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="quant",
+    name="quant-veltzer-doron",
     version="0.0.1",
     author="Veltzer Doron",
     author_email="veltzerdoron@gmail.com",
