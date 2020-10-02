@@ -4,8 +4,8 @@
 
 # my class imports
 
-from quant.quantifiers import *
-from quant.models import AE
+from quants.quantifiers import *
+from quants.models import AE
 
 # keras and TF imports
 

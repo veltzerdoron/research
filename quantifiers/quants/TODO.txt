@@ -1,0 +1,15 @@
+# Create quantifier python package and upload it to github / pypi as part of this research project
+
+* work on model class hierarchy
+    * write AE class and tests
+    * generalize the AE and Classifier models
+    * add testing evaluation results storage and exposure to user (add in tests)
+* multinomial distribution generation in fill method
+
+Done:
+* write package tests for Quantifiers and Classifier
+* keep quantifier order
+* code cleanup
+* min max scene len (add code option to generate limited lengthes of scenes)
+* quant.py classes
+* install package locally and start working with it

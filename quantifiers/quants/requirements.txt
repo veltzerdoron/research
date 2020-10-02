@@ -86,7 +86,7 @@ PyYAML==5.3.1
 pyzmq==19.0.1
 qtconsole==4.7.4
 QtPy==1.9.0
--e git+https://github.com/veltzerdoron/research.git@de070aac97e0090eb096f67b4600ce67b964513f#egg=quant&subdirectory=quantifiers/quant
+-e git+https://github.com/veltzerdoron/research.git@de070aac97e0090eb096f67b4600ce67b964513f#egg=quant&subdirectory=quantifiers/quants
 requests==2.22.0
 requests-oauthlib==1.3.0
 retrying==1.3.3
