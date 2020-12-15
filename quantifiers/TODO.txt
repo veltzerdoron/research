@@ -1,0 +1,31 @@
+STS:
+* do generalization and length tests for STS
+* reread V(Keenan), STS & V(Chemla) and Quantifier acquisition
+
+Urgent:
+* AE
+* do generalization tests on my models
+* read CNN biological plausibility papers
+* analysis of model weight values after training (Conv + Dense)
+    * understand how CNN learns unnatural quantifiers
+
+Done:
+* CNN, DNN version of NN
+
+*understand STS code + analysis
+
+* confusion matrix metrics
+   Conv1D usage is not very efficient on GPU moved to CPU
+* fix CuDNN dll library versions to make the conv work with GPU:
+    https://towardsdatascience.com/installing-tensorflow-gpu-in-ubuntu-20-04-4ee3ca4cb75d
+* compare natural quantifier to general quantifiers learning
+* added test for random scenes
+* wrote code for teacher student
+    This is a problematic method, leave repeat at 1 to neutralize
+* rewrote my models pdf
+* wrote abstract for Rony and get back in contact
+
+
+Future ideas:
+*** check if the classifier can learn non conservative quantifiers
+*** run this on random world/ general quantifier world/natural quantifier world to tease apart the effects of the world and that of the "computation cognitive bias".

@@ -1,0 +1,9 @@
+# general things to ignore
+.ipynb_checkpoints/
+*.py[cod]
+*.so
+*~
+
+# due to using tox and pytest
+.tox
+.cache

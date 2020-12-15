@@ -1,0 +1,23 @@
+* multinomial selection of counts
+* quantifiers work according to constraints
+
+* work on model class hierarchy
+    * Finish running AE class and tests
+    * generalize the AE and Classifier models
+    * add testing evaluation results storage and exposure to user (add in tests)
+
+
+* distinguish classifiers according to monotonicity
+* multinomial distribution generation in fill and generation methods
+* write weight analyzer in model class
+
+*** Create quantifier python package and upload it to github / pypi as part of this research project
+
+Done:
+* handle out of memory issue when running the package twice
+* write package tests for Quantifiers and Classifier
+* keep quantifier order
+* code cleanup
+* min max scene len (add code option to generate limited lengths of scenes)
+* classes
+* install package locally and start working with it
