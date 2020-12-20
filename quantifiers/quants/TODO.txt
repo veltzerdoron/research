@@ -1,23 +1,32 @@
-* multinomial selection of counts
-* quantifiers work according to constraints
+* finish reading CNN papers and set meeting with Ezer.
+* distinguish between classifiers according to monotonicity
+* finish perusing quantifier booklets and set meeting with Roni.
+* write weight analyzer in model class
 
+Classfiers:
+    * Finish the softmax AE classifier class
+    * add testing evaluation results storage and exposure to user (add in tests)
+
+*** Create quants python package and upload it to github / pypi as part of this research project
+
+Done:
+
+Classifiers:
 * work on model class hierarchy
     * Finish running AE class and tests
     * generalize the AE and Classifier models
-    * add testing evaluation results storage and exposure to user (add in tests)
 
+Quantifiers:
+* improved quantifiers classes
+    * multinomial distribution generation in fill and generation methods
+    * multinomial selection of counts
+    * quantifiers work according to constraints
+    * natural and non natural quantifiers in hierarchy
+* keep quantifier order
+* min max scene len (add code option to generate limited lengths of scenes)
 
-* distinguish classifiers according to monotonicity
-* multinomial distribution generation in fill and generation methods
-* write weight analyzer in model class
-
-*** Create quantifier python package and upload it to github / pypi as part of this research project
-
-Done:
 * handle out of memory issue when running the package twice
 * write package tests for Quantifiers and Classifier
-* keep quantifier order
 * code cleanup
-* min max scene len (add code option to generate limited lengths of scenes)
-* classes
-* install package locally and start working with it
+
+* installed package locally and start working with it

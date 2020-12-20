@@ -1,5 +1,3 @@
-from abc import ABCMeta, abstractmethod
-
 # scene symbols
 ab_symbol = 0  # elements in A and in B (A&B)
 a_b_symbol = 1  # elements in A but not in B (A-B)
@@ -9,7 +7,7 @@ c_symbol = 3  # irrelevant (don't care) padding elements
 symbols = [ab_symbol, a_b_symbol, b_a_symbol, c_symbol]
 
 
-class Constraint(metaclass=ABCMeta):
+class Constraint:
     """
     A class that embodies constraints on the symbol counts in a scene
     this lies at the heart of both:
@@ -28,11 +26,10 @@ class Constraint(metaclass=ABCMeta):
     def reversed(self):
         """
         reverses the constraint
-        :return: reversal of this constraint
+        :return: reversed version of this constraint
         """
         return self.__class__(self, reverse=not self._reverse)
 
-    @abstractmethod
     def comply(self, counts):
         """
         Check if the counts comply to the constraint, also sets count if constant
@@ -100,3 +97,10 @@ class ConstantConstraint(Constraint):
             counts[self._symbol] = self._constant
             return True
         return self._reverse != (counts[self._symbol] == self._constant)
+
+
+class EvenConstraint(Constraint):
+    """ Even constraint on a single symbol count """
+
+    def comply(self, counts):
+        return self._reverse != (counts[self._symbol] % 2 == 0)

@@ -1,12 +1,13 @@
-from quants.quantifiers import Quantifier
+from quants.quantifiers import Quantifier, QuantityQuantifier
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-from keras.utils import plot_model
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras.models import clone_model
+
 from keras.utils import np_utils
-from keras.models import clone_model
 from sklearn.metrics import confusion_matrix, classification_report
 
 from copy import copy
@@ -63,7 +64,7 @@ class Classifier(metaclass=ABCMeta):
         :param min_len: minimal number of scene symbols (apart from the don't care symbols)
         :param max_len: maximal number of scene symbols (apart from the don't care symbols)
 
-        :param teacher: when provided we use the teach to classify the scenes for the student
+        :param teacher: when provided we use the teacher to classify the scenes for the student
         otherwise labeling is done by the quantifiers given to the classifier
 
         :return: scenes, labels (shuffled and coordinated)
@@ -76,11 +77,11 @@ class Classifier(metaclass=ABCMeta):
             labels = teacher.label(scenes)
         else:
             # otherwise encode class names as integer indices
-            labels = np.concatenate([[self.index(quantifier.name())] * scene_num
-                                     for quantifier in self._quantifiers]).ravel()
+            labels = np.concatenate([[i] * scene_num
+                                     for i, quantifier in enumerate(self._quantifiers)]).ravel()
 
         def tandem_shuffle(a, b):
-            """ shuffle the two given arrays in tandem"""
+            """ shuffle two arrays in tandem"""
             assert len(a) == len(b)
             p = np.random.permutation(len(a))
             return a[p], b[p]
@@ -118,14 +119,16 @@ class Classifier(metaclass=ABCMeta):
             # iterate while using the previous model as label generator
             for _ in range(repeat):
                 # generate fit and test model
+                print("TRAIN")
                 train_scenes_labels = self.generate_labeled_scenes(scene_num, min_len, max_len,
                                                                    teacher=prev_classifier)
+                self.fit(*train_scenes_labels, epochs=epochs, batch_size=batch_size, verbose=verbose, *vargs, **kwargs)
+                self.test(*train_scenes_labels, verbose=verbose)
+
+                print("TEST")
+                # we always test with the full scene length
                 test_scenes_labels = self.generate_labeled_scenes(scene_num,
                                                                   teacher=prev_classifier)
-                self.fit(*train_scenes_labels, epochs=epochs, batch_size=batch_size, verbose=verbose, *vargs, **kwargs)
-                print("TRAIN")
-                self.test(*train_scenes_labels, verbose=verbose)
-                print("TEST")
                 self.test(*test_scenes_labels, verbose=verbose)
                 self.test_random(1000, verbose=verbose)
                 prev_classifier = self.clone()
@@ -153,14 +156,7 @@ class Classifier(metaclass=ABCMeta):
         :param scenes: input scenes to label
         :param verbose: verbosity passed to keras methods
 
-        :return: labels
-        """
-        pass
-
-    @abstractmethod
-    def index(self, class_name):
-        """
-        :param class_name: transform the class name into its class ID
+        :return: labels and the prediction probabilities
         """
         pass
 
@@ -179,11 +175,11 @@ class Classifier(metaclass=ABCMeta):
         results = self.label(scenes, verbose=verbose)
         print("Confusion matrix: ")
         print(pd.DataFrame(
-            confusion_matrix(labels, results, labels=self._quantifier_names),
+            confusion_matrix(labels, results[0], labels=list(range(len(self._quantifier_names)))),
             index=self._quantifier_names,
             columns=self._quantifier_names))
         print("Classification report: ")
-        print(classification_report(labels, results, target_names=self._quantifier_names, digits=4))
+        print(classification_report(labels, results[0], target_names=self._quantifier_names, digits=4))
 
     def test_random(self, scene_num=Quantifier.scene_num, min_len=0, max_len=Quantifier.scene_len, verbose=1):
         """
@@ -195,19 +191,19 @@ class Classifier(metaclass=ABCMeta):
 
         :param verbose: verbosity passed to keras methods
         """
-        scenes = self.prepare(Quantifier.generate_random_scenes(scene_num, min_len, max_len))
+        scenes = self.prepare(QuantityQuantifier().generate_scenes(scene_num, min_len, max_len))
 
         # get the models' classifications of the scenes
         results = self.label(scenes, verbose=verbose)
         # see if the quantifiers agree with the classifier on the scenes
-        print("Quantifier counts: ", np.bincount(results))
+        print("Quantifier counts: ", np.bincount(results[0]))
         support = sum([any([quantifier.quantify(scene)
                             for quantifier in self._quantifiers])
                        for scene in scenes])
         if support > 0:
             print("Support: ", support)
-            print("Accuracy: ", sum([self._quantifiers[result].quantify(scene)
-                                     for result, scene in zip(results, scenes)]) / support)
+            print("Accuracy: ", sum([int(self._quantifiers[0].quantify(scene) == label)
+                                     for label, scene in zip(results[0], scenes)]) / scene_num)
         else:
             print("NO SUPPORT")
 
@@ -228,13 +224,12 @@ class AEClassifier(Classifier, metaclass=ABCMeta):
 
     def __init__(self, quantifier, *argv, **kwargs):
         """
-                :param quantifier: quantifier for generating the input samples to be reconstructed by the AE
+        :param quantifier: quantifier for generating the input samples to be reconstructed by the AE
         """
         super().__init__(quantifiers=[quantifier], *argv, **kwargs)
-
         self._threshold = 0
 
-    def fit(self, scenes, labels,
+    def fit(self, scenes, _,
             *vargs, **kwargs):
         # all labels are true here so we ignore them and fit the AE to the scenes
         self._model.fit(scenes, scenes,
@@ -247,38 +242,18 @@ class AEClassifier(Classifier, metaclass=ABCMeta):
 
     def label(self, scenes, verbose=1):
         output_scenes = self._model.predict(scenes, verbose=verbose)
+        error = (np.square(scenes - output_scenes)).mean(axis=1)
+        return (error > self._threshold).astype(int), (self._threshold / error)
 
-        labels, probabilities = [], []
-        for scene, output_scene in zip(scenes, output_scenes):
-            error = (np.square(scene - output_scene)).mean(axis=0)
-            labels.append(error <= self._threshold)
-            probabilities.append(error / self._threshold)
-        return labels, probabilities
+    def test(self, scenes, labels=None, verbose=1):
+        """ Change the test method to fit AE classification """
+        print("Evaluation metrics: ")
+        print(self._model.evaluate(scenes, scenes, verbose=verbose))
+        results = self.label(scenes, verbose=verbose)
+        print("Classification report: ")
+        print(classification_report(labels, results[0], labels=[0],
+                                    target_names=self._quantifier_names, digits=4))
 
-    # def test(self, scenes, labels=None, verbose=1):
-    #     """
-    #     test the model on given labeled scenes
-    #     prints evaluation metrics, confusion matrix and per class classification_report
-    #
-    #     :param scenes: scene inputs for testing
-    #     :param labels: expected outputs
-    #
-    #     :param verbose: verbosity passed to keras methods
-    #     """
-    #
-    #     if not labels:
-    #         labels = [True] * len(scenes)
-    #     results = self.predict(scenes, verbose=verbose)
-    #     print("Confusion matrix: ")
-    #     names = ["Not {}".format(self._quantifier.name()), self._quantifier.name()]
-    #     print(pd.DataFrame(
-    #         confusion_matrix(labels, results, labels=[True, False]),
-    #         index=names,
-    #         columns=names))
-    #     print("Classification report: ")
-    #     print(classification_report(labels, results, labels=[True, False],
-    #                                 target_names=names, digits=4))
-    #
     # def test_random(self, scene_num=Quantifier.scene_num, min_len=0, max_len=Quantifier.scene_len, verbose=1):
     #     """
     #     tests the model on randomly generated scenes
@@ -309,18 +284,24 @@ class AEClassifier(Classifier, metaclass=ABCMeta):
 
 class AESoftmaxClassifier(Classifier, metaclass=ABCMeta):
 
-    def __init__(self, *argv, **kwargs):
-        super().__init__(*argv, **kwargs)
-
-        # build AEClassifier for each of the quantifiers
-        self._classifiers = [AEClassifier(quantifier) for quantifier in self._quantifiers]
+    def build(self):
+        # return AEClassifiers and initialized weight per quantifier
+        return [(AEClassifier(quantifier), 1) for quantifier in self._quantifiers]
 
     def fit(self, scenes, labels,
             *vargs, **kwargs):
-        for classifier in self._classifiers:
-            classifier.fit(scenes, scenes,
+        # go over the AEClassifiers and fit their appropriate scenes
+        for i, (classifier, _) in enumerate(self._model):
+            classifier.fit(*[(scene, label) for scene, label in zip(scenes, labels) if label == i],
                            *vargs, **kwargs)
+        for i, (classifier, weight) in enumerate(self._model):
+            classifier.label(*[(scene, label) for scene, label in zip(scenes, labels) if label == i],
+                             *vargs, **kwargs)
 
     def label(self, scenes, verbose=1):
-        probabilities = [classifier.label(scenes)[1] for classifier in self._classifiers]
-        # perform softmax on probabilities to get and return labels and probabilities
+        ps = np.array([(classifier.label(scenes)[1] * weight) for classifier, weight in self._model])
+        labels = np.argmax(ps, axis=1)
+        es = np.exp(ps)
+        ss = np.sum(es, axis=1)
+        probabilities = [es[label] / s for label, s in zip(labels, ss)]
+        return labels, probabilities
