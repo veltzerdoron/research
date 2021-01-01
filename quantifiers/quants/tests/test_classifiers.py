@@ -5,9 +5,10 @@
 import unittest
 
 # my class imports
+from keras.layers import UpSampling1D
 
 from quants.quantifiers import *
-from quants.classifiers import SoftmaxClassifier, AEClassifier
+from quants.classifiers import SoftmaxClassifier, CNNClassifier, AEClassifier
 
 # keras and TF imports
 
@@ -15,7 +16,6 @@ import tensorflow as tf
 
 from tensorflow.python.keras import Sequential
 from tensorflow.python.keras.layers import Dense, Conv1D, Dropout, Flatten, MaxPooling1D
-from keras.utils import np_utils
 
 # print("TensorFlow version: ", tf.__version__)
 #
@@ -28,27 +28,36 @@ from keras.utils import np_utils
 # Auto Encoder Classifier model for testing
 
 
-class CNNAEClassifier(AEClassifier):
+class CNNAEClassifier(CNNClassifier, AEClassifier):
     def build(self):
         """ Convolutional classifier model builder method """
         model = Sequential()
         # encoding
-        model.add(Conv1D(60, 32, strides=1, activation='relu', padding='causal', input_shape=(Quantifier.scene_len, 1)))
-        model.add(Conv1D(80, 10, strides=1, activation='relu', padding='causal'))
-        model.add(Dropout(0.25))
-        model.add(Conv1D(100, 5, strides=1, activation='relu', padding='causal'))
-        model.add(MaxPooling1D(1))
+        model.add(Conv1D(16, 3, padding='same', activation='relu', input_shape=(Quantifier.scene_len, 1)))
+        # model.add(MaxPooling1D(pool_size=(2, 2), padding='same'))
+        model.add(Conv1D(2, 3, padding='same', activation='relu'))
+        # model.add(MaxPooling1D(pool_size=2, padding='same'))
         # decoding
-        model.add(Dropout(0.25))
-        model.add(Dense(300, activation='relu'))
-        model.add(Dense(1, activation='relu'))
-        model.compile(loss='mse', optimizer='adam', metrics=[tf.keras.metrics.Precision(),
-                                                             tf.keras.metrics.Recall()])
-        return model
+        model.add(Conv1D(2, 3, padding='same', activation='relu'))
+        # model.add(UpSampling1D(2))
+        model.add(Conv1D(16, 3, padding='same', activation='relu'))
+        # model.add(UpSampling1D(2))
+        model.add(Conv1D(1, 3, padding='same', activation='sigmoid'))
+        model.compile(loss='binary_crossentropy', optimizer='Adadelta')
 
-    @staticmethod
-    def prepare(scenes):
-        return np_utils.to_categorical(scenes)
+        # model.add(Conv1D(60, 32, strides=1, activation='relu', padding='causal',
+        #                  input_shape=(Quantifier.scene_len, 1)))
+        # model.add(Conv1D(80, 10, strides=1, activation='relu', padding='causal'))
+        # model.add(Dropout(0.25))
+        # model.add(Conv1D(100, 5, strides=1, activation='relu', padding='causal'))
+        # model.add(MaxPooling1D(1))
+        # # decoding
+        # model.add(Dropout(0.25))
+        # model.add(Dense(300, activation='relu'))
+        # model.add(Dense(1, activation='relu'))
+        # model.compile(loss='mse', optimizer='adam')
+
+        return model
 
 
 class DenseAEClassifier(AEClassifier):
@@ -119,25 +128,30 @@ class DenseAEClassifier(AEClassifier):
 # CNN Softmax Classifier model for testing
 
 
-class CNNSoftmaxClassifier(SoftmaxClassifier):
+class CNNSoftmaxClassifier(CNNClassifier, SoftmaxClassifier):
     def build(self):
         """ Convolutional classifier model builder method """
         model = Sequential()
-        model.add(Conv1D(filters=2, kernel_size=1,
-                         use_bias=False,
+        model.add(Conv1D(filters=1, kernel_size=1,
+                         kernel_initializer="constant",
+                         use_bias=False, trainable=False,
                          input_shape=(Quantifier.scene_len, len(symbols)), name="conv_1"))
-        # model.add(Dropout(0.50, name="dropout_1"))
+        model.add(Dropout(0.25, name="dropout_1"))
         model.add(Flatten())
-        model.add(Dense(len(self._quantifiers),
-                        activation='softmax', name="softmax_1"))
-        # Compile model
-        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=[tf.keras.metrics.Precision(),
-                                                                                  tf.keras.metrics.Recall()])
+        # dense_initializer = tf.keras.initializers.Constant(1.)
+        # model.add(Dense(len(self._quantifiers) + 1,
+        #                 kernel_initializer=dense_initializer,
+        #                 use_bias=False, trainable=False,
+        #                 activation='linear', name="dense_1"))
+        model.add(Dense(len(self._quantifiers) + 1,
+                        # kernel_initializer=dense_initializer,
+                        use_bias=False,
+                        activation='sigmoid', name="dense_2"))  # Compile model
+        weights = np.array([[1, -1, 0, 0]]).reshape(1, 4, 1)
+        model.layers[0].set_weights([weights])
+        # print(model.layers[0].get_weights())
+        model.compile(loss='mean_squared_error', optimizer='adam')
         return model
-
-    @staticmethod
-    def prepare(scenes):
-        return np_utils.to_categorical(scenes)
 
 
 class TestClassifiers(unittest.TestCase):
@@ -146,8 +160,11 @@ class TestClassifiers(unittest.TestCase):
         CNNSoftmaxClassifier(natural_quantifiers).learn(epochs=100, verbose=1).plot()
 
     def test_Monotonicity(self):
-        natural_quantifiers = [AFew(), Between(3, 20)]
-        CNNSoftmaxClassifier(natural_quantifiers).learn(epochs=100, verbose=1).plot()
+        # natural_quantifiers = [The(), Both(), No(), All(), Some(), Most()]
+        most_quantifiers = [Most(), Some()]
+        # monotonicity_quantifiers = [Most(), Between(2, 50)]
+        # unnatural_quantifiers = [Between(2, 50), Between(8, 40), Between(12, 35)]
+        CNNSoftmaxClassifier(most_quantifiers).learn(epochs=100, verbose=1).plot()
 
     def test_Dense_AE_classifier(self):
         quantifier = Most()

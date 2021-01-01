@@ -21,7 +21,7 @@ class Classifier(metaclass=ABCMeta):
         :param quantifiers: quantifiers to be classified
         """
         self._quantifiers = quantifiers
-        self._quantifier_names = [quantifier.name() for quantifier in quantifiers]
+        self._quantifier_names = [quantifier.name() for quantifier in quantifiers] + ["Other"]
 
         if name:
             self._name = name
@@ -41,6 +41,9 @@ class Classifier(metaclass=ABCMeta):
     def plot(self):
         plot_model(self._model, to_file='{name}.png'.format(name=self._name), show_shapes=True)
 
+    def summary(self):
+        return self._model.summary()
+
     def clone(self):
         """
         clones the model (wrapping the TF method)
@@ -56,7 +59,7 @@ class Classifier(metaclass=ABCMeta):
         return scenes
 
     def generate_labeled_scenes(self, scene_num=Quantifier.scene_num, min_len=0, max_len=Quantifier.scene_len,
-                                teacher=None):
+                                teacher=None, learning_quantifiers=None):
         """
         generates and returns scenes and labels
 
@@ -66,11 +69,20 @@ class Classifier(metaclass=ABCMeta):
 
         :param teacher: when provided we use the teacher to classify the scenes for the student
         otherwise labeling is done by the quantifiers given to the classifier
+        :param learning_quantifiers: if given these are used to generate more labeled cases for the classifier to learn from
 
         :return: scenes, labels (shuffled and coordinated)
         """
-        scenes = self.prepare(np.vstack([quantifier.generate_scenes(scene_num, min_len, max_len)
-                                         for quantifier in self._quantifiers]))
+        scenes = np.vstack([quantifier.generate_scenes(scene_num, min_len, max_len)
+                            for quantifier in self._quantifiers])
+
+        learning_scenes = []
+        if learning_quantifiers:
+            learning_scenes = np.vstack([quantifier.generate_scenes(scene_num, min_len, max_len)
+                                         for quantifier in learning_quantifiers])
+            scenes = np.vstack(scenes, learning_scenes)
+
+        scenes = self.prepare(scenes)
 
         if teacher:
             # if a teacher model was supplied let the teacher label the scenes
@@ -78,7 +90,19 @@ class Classifier(metaclass=ABCMeta):
         else:
             # otherwise encode class names as integer indices
             labels = np.concatenate([[i] * scene_num
-                                     for i, quantifier in enumerate(self._quantifiers)]).ravel()
+                                     for i, quantifier in enumerate(self._quantifiers)])
+
+            if learning_quantifiers:
+                learning_labels = []
+                for scene in learning_scenes:
+                    possible_labels = [i for i, quantifier in enumerate(self._quantifiers)
+                                       if quantifier.quantify(scene)]
+                    label = np.random.choice(possible_labels) if labels else len(self._quantifiers) + 1
+                    learning_labels.append(label)
+
+                labels = np.vstack(labels, np.array(learning_labels))
+
+            labels = labels.ravel()
 
         def tandem_shuffle(a, b):
             """ shuffle two arrays in tandem"""
@@ -90,7 +114,8 @@ class Classifier(metaclass=ABCMeta):
         return tandem_shuffle(scenes, labels)
 
     def learn(self, scene_num=Quantifier.scene_num, min_len=0, max_len=Quantifier.scene_len,
-              teacher=None, repeat=1, epochs=50, batch_size=10, verbose=1,
+              repeat=1, epochs=50, batch_size=10, verbose=1,
+              teacher=None, learning_quantifiers=None,
               *vargs, **kwargs):
         """
         This method teaches a classifier to classify its quantifiers
@@ -99,14 +124,15 @@ class Classifier(metaclass=ABCMeta):
         :param min_len: minimal number of scene symbols (apart from the don't care symbols)
         :param max_len: maximal number of scene symbols (apart from the don't care symbols)
 
-        :param teacher: when provided we use the teacher to classify the scenes for our student
-        otherwise labeling is done by the quantifier that generates the scene (for first teaching iteration)
-
         :param repeat: teacher student learning performed for repeat # of rounds
 
         :param epochs: epochs # passed to keras learning
         :param batch_size: batch size passed to keras learning
         :param verbose: verbosity passed to keras methods
+
+        :param teacher: when provided we use the teacher to classify the scenes for our student
+        otherwise labeling is done by the quantifier that generates the scene (for first teaching iteration)
+        :param learning_quantifiers: if given these are used to generate more labeled cases for the classifier to learn from
 
         :param vargs : arguments passed on to the model.fit() method
         :param kwargs : key arguments passed on to the model.fit() method
@@ -121,12 +147,13 @@ class Classifier(metaclass=ABCMeta):
                 # generate fit and test model
                 print("TRAIN")
                 train_scenes_labels = self.generate_labeled_scenes(scene_num, min_len, max_len,
-                                                                   teacher=prev_classifier)
+                                                                   teacher=prev_classifier,
+                                                                   learning_quantifiers=learning_quantifiers)
                 self.fit(*train_scenes_labels, epochs=epochs, batch_size=batch_size, verbose=verbose, *vargs, **kwargs)
                 self.test(*train_scenes_labels, verbose=verbose)
 
                 print("TEST")
-                # we always test with the full scene length
+                # we always test with the full scene length and only on the quantifiers we were supposed to learn
                 test_scenes_labels = self.generate_labeled_scenes(scene_num,
                                                                   teacher=prev_classifier)
                 self.test(*test_scenes_labels, verbose=verbose)
@@ -171,7 +198,8 @@ class Classifier(metaclass=ABCMeta):
         :param verbose: verbosity passed to keras methods
         """
         print("Evaluation metrics: ")
-        print(self._model.evaluate(scenes, np_utils.to_categorical(labels), verbose=verbose))
+        print(self._model.evaluate(scenes, np_utils.to_categorical(labels, num_classes=len(self._quantifiers) + 1),
+                                   verbose=verbose))
         results = self.label(scenes, verbose=verbose)
         print("Confusion matrix: ")
         print(pd.DataFrame(
@@ -202,17 +230,25 @@ class Classifier(metaclass=ABCMeta):
                        for scene in scenes])
         if support > 0:
             print("Support: ", support)
-            print("Accuracy: ", sum([int(self._quantifiers[0].quantify(scene) == label)
-                                     for label, scene in zip(results[0], scenes)]) / scene_num)
+            print("Accuracy: ", sum([int(self._quantifiers[label].quantify(scene))
+                                     for label, scene in zip(results[0], scenes)
+                                     if label < len(self._quantifiers)]) / scene_num)
         else:
             print("NO SUPPORT")
+
+
+class CNNClassifier(Classifier, metaclass=ABCMeta):
+
+    def prepare(self, scenes):
+        """ override this to conform scenes to network's input, by default scenes are not prepared"""
+        return np_utils.to_categorical(scenes)
 
 
 class SoftmaxClassifier(Classifier, metaclass=ABCMeta):
 
     def fit(self, scenes, labels,
             *vargs, **kwargs):
-        self._model.fit(scenes, np_utils.to_categorical(labels),
+        self._model.fit(scenes, np_utils.to_categorical(labels, num_classes=len(self._quantifiers) + 1),
                         *vargs, **kwargs)
 
     def label(self, scenes, verbose=1):
@@ -232,8 +268,7 @@ class AEClassifier(Classifier, metaclass=ABCMeta):
     def fit(self, scenes, _,
             *vargs, **kwargs):
         # all labels are true here so we ignore them and fit the AE to the scenes
-        self._model.fit(scenes, scenes,
-                        *vargs, **kwargs)
+        self._model.fit(scenes, scenes, *vargs, **kwargs)
 
         # set threshold as twice the average reconstruction error
         output_scenes = self._model.predict(scenes, verbose=0)
@@ -292,11 +327,9 @@ class AESoftmaxClassifier(Classifier, metaclass=ABCMeta):
             *vargs, **kwargs):
         # go over the AEClassifiers and fit their appropriate scenes
         for i, (classifier, _) in enumerate(self._model):
-            classifier.fit(*[(scene, label) for scene, label in zip(scenes, labels) if label == i],
-                           *vargs, **kwargs)
+            classifier.fit(*[(scene, label) for scene, label in zip(scenes, labels) if label == i], *vargs, **kwargs)
         for i, (classifier, weight) in enumerate(self._model):
-            classifier.label(*[(scene, label) for scene, label in zip(scenes, labels) if label == i],
-                             *vargs, **kwargs)
+            classifier.label(*[(scene, label) for scene, label in zip(scenes, labels) if label == i], *vargs, **kwargs)
 
     def label(self, scenes, verbose=1):
         ps = np.array([(classifier.label(scenes)[1] * weight) for classifier, weight in self._model])

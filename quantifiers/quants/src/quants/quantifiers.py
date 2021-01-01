@@ -1,11 +1,12 @@
+from collections import defaultdict
+
 from quants.constraints import *
 
 import numpy as np
 import random
 
 from itertools import chain
-from collections import defaultdict
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 
 
 class Quantifier(metaclass=ABCMeta):
@@ -54,17 +55,34 @@ class Quantifier(metaclass=ABCMeta):
 
     # generative methods
 
-    @abstractmethod
     def generate_scene(self, min_len=0, max_len=scene_len):
         """
-        generate a scene that gives a truth value under the quantifier
+        Generate random scene directly via uniform distribution
 
         :param min_len: minimal number of scene symbols (apart from the don't care symbols)
         :param max_len: maximal number of scene symbols (apart from the don't care symbols)
 
         :return: the generated scene (list of symbols)
         """
-        pass
+        assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
+
+        # Note: this is commented out, Multinomial doesn't cover all the possibilities of the counts simplex very well
+        # return np.random.permutation(
+        #     np.concatenate([np.random.choice(symbols[:3], min_len),
+        #                     np.random.choice(symbols, max_len - min_len),
+        #                     np.array([symbols[3]] * (Quantifier.scene_len - max_len))]))
+
+        while True:
+            random_counts = self._random_generate_constant_sum(len(symbols), Quantifier.scene_len)[0]
+
+            # if this is not the required length regenerate the random numbers
+            if min_len <= Quantifier.scene_len - random_counts[-1] <= max_len:
+                continue
+
+            # build the scene with the valid counts
+            scene = np.random.permutation(dict(*zip(symbols, random_counts)))
+            # sanity check that the scene we generated gives a quantifier true scene
+            assert (self.quantify(scene)), "{} == False".format(self.name(scene="quantifier generated"))
 
     def generate_scenes(self, scene_num=scene_num, min_len=0, max_len=scene_len):
         """
@@ -80,24 +98,6 @@ class Quantifier(metaclass=ABCMeta):
         scenes = [self.generate_scene(min_len, max_len)
                   for _ in range(scene_num)]
         return np.vstack(scenes)
-
-    # @staticmethod
-    # def generate_random_scene(min_len=0, max_len=scene_len):
-    #     """
-    #     Generate random scene directly via multinomial distribution
-    #     note: this doesn't cover all the possibilities of the simplex very well
-    #
-    #     :param min_len: minimal number of scene symbols (apart from the don't care symbols)
-    #     :param max_len: maximal number of scene symbols (apart from the don't care symbols)
-    #
-    #     :return: the generated scene (list of symbols)
-    #     """
-    #     assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
-    #
-    #     return np.random.permutation(
-    #         np.concatenate([np.random.choice(symbols[:3], min_len),
-    #                         np.random.choice(symbols, max_len - min_len),
-    #                         np.array([symbols[3]] * (Quantifier.scene_len - max_len))]))
 
     @staticmethod
     def scene(counts, min_len=0, max_len=scene_len):
@@ -128,10 +128,9 @@ class Quantifier(metaclass=ABCMeta):
 
     # scene quantification methods
 
-    @abstractmethod
     def quantify(self, scene):
         # evaluate the scene under the quantifier
-        pass
+        return True
 
 
 class QuantityQuantifier(Quantifier):
@@ -155,7 +154,7 @@ class QuantityQuantifier(Quantifier):
         """
         assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
 
-        counts = defaultdict(int)
+        counts = {}
 
         # go over the constraints twice and see all constant constraints don't contradict
         for _ in range(2):
@@ -166,7 +165,7 @@ class QuantityQuantifier(Quantifier):
         basic_len = sum(counts.values())
         assert (basic_len <= max_len), "quantifier has minimal symbols limit ({max_len})".format(max_len=max_len)
 
-        # TODO: go over constraints pairs for contradictions (otherwise the following loop might be infinite)
+        # TODO: go over constraints pairs to look for contradictions (otherwise the following loop might be infinite)
         # loop till we get counts that comply with the constraints
         while True:
             random_counts = self._random_generate_constant_sum(len(symbols) - len(counts.keys()),
@@ -185,7 +184,7 @@ class QuantityQuantifier(Quantifier):
                     i += 1
 
             # if scene counts comply with all quantifier constraints
-            if all([constraint.comply(filled_counts) for constraint in self.constraints()]):
+            if self.quantification(filled_counts):
                 # build the scene with the valid counts
                 scene = np.random.permutation(self.scene(filled_counts))
                 # sanity check that the scene we generated gives a quantifier true scene
@@ -197,7 +196,8 @@ class QuantityQuantifier(Quantifier):
 
     def quantify(self, scene):
         # evaluate the scene by calling the quantifier with the counts of the different symbols
-        return self.quantification(defaultdict(int, zip(*np.unique(scene, return_counts=True))))
+        return self.quantification({symbol: defaultdict(int, zip(*np.unique(scene, return_counts=True)))[symbol]
+                                    for symbol in symbols})
 
     def quantification(self, counts):
         # check that counts are compliant with all the constraints
@@ -256,12 +256,20 @@ class No(QuantityQuantifier):
                 ConstantRangeConstraint(symbol=a_b_symbol, restriction=1)]
 
 
-class All(QuantityQuantifier):
+class All(QuantityQuantifier):  # also called Every
     def constraints(self):
         # all as are bs means that no as are not bs (==0)
         # we also add the constraint that some as are bs so that we have some as in the context (>=1)
         return [ConstantConstraint(symbol=a_b_symbol),
                 ConstantRangeConstraint(symbol=ab_symbol, restriction=1)]
+
+
+class All2(QuantityQuantifier):  # also called Every
+    def constraints(self):
+        # all2 as are bs means that no as are not bs (==0)
+        # we also add the constraint that some as are bs so that we have some as in the context (>=2)
+        return [ConstantConstraint(symbol=a_b_symbol),
+                ConstantRangeConstraint(symbol=ab_symbol, restriction=2)]
 
 
 class The(QuantityQuantifier):
@@ -286,25 +294,7 @@ class N(QuantityQuantifier):
         # n as are bs means that there are at least n as that are bs
         return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._n)]
 
-
-class ExactlyN(QuantityQuantifier):
-    def __init__(self, n):
-        self._n = n
-
-    def constraints(self):
-        # exactly n as are bs means that there are exactly n as that are bs
-        return [ConstantConstraint(symbol=ab_symbol, constant=self._n)]
-
-
-class Between(QuantityQuantifier):
-    def __init__(self, min_a, max_a):
-        assert (min_a < max_a)
-        self._min_a = min_a
-        self._max_a = max_a
-
-    def constraints(self):
-        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._min_a),
-                ConstantRangeConstraint(symbol=ab_symbol, restriction=self._max_a + 1, reverse=True)]
+# compositional quantifier classes
 
 
 class Conjunction(QuantityQuantifier, metaclass=ABCMeta):
@@ -345,19 +335,41 @@ class Operator(QuantityQuantifier, metaclass=ABCMeta):
 
 class Not(Operator):
     def constraints(self):
-        return [constraint.reversed() for constraint in self._quantifier.constrains()]
+        return [constraint.reversed() for constraint in self._quantifier.constraints()]
+
+# non natural (non monotone) quantifiers
 
 
-class Even(Operator):
+class ExactlyN(QuantityQuantifier):
+    def __init__(self, n):
+        self._n = n
+
+    def constraints(self):
+        # exactly n as are bs means that there are exactly n as that are bs
+        return [ConstantConstraint(symbol=ab_symbol, constant=self._n)]
+
+
+class Between(QuantityQuantifier):
+    def __init__(self, min_a, max_a):
+        assert (min_a < max_a)
+        self._min_a = min_a
+        self._max_a = max_a
+
+    def constraints(self):
+        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._min_a),
+                ConstantRangeConstraint(symbol=ab_symbol, restriction=self._max_a + 1, reverse=True)]
+
+
+class Even(QuantityQuantifier):
     def constraints(self):
         return [EvenConstraint(symbol=ab_symbol)]
 
 
-class Odd(Operator):
+class Odd(QuantityQuantifier):
     def constraints(self):
         return [EvenConstraint(symbol=ab_symbol).reversed()]
 
-# non natural quantity compliant constraints
+# non natural quantity compliant quantifiers
 
 
 class FirstN(Quantifier):
@@ -365,11 +377,17 @@ class FirstN(Quantifier):
         self._n = n
 
     def generate_scene(self, min_len=0, max_len=Quantifier.scene_len):
-        random_counts = self._random_generate_constant_sum(3, Quantifier.scene_len - 3,)[0]
+        while True:
+            random_counts = self._random_generate_constant_sum(len(symbols), Quantifier.scene_len)[0]
 
-        return self._random_interleave([ab_symbol] * self._n + [a_b_symbol] * random_counts[0],
-                                       np.random.permutation([b_a_symbol] * random_counts[1] +
-                                                             [c_symbol] * random_counts[2]))
+            # if this is not the required length regenerate the random numbers
+            if not (min_len <= Quantifier.scene_len - random_counts[-1] <= max_len):
+                continue
+
+            return np.array(self._random_interleave([ab_symbol] * (self._n + random_counts[0]) +
+                                                    [a_b_symbol] * random_counts[1],
+                                                    np.random.permutation([b_a_symbol] * random_counts[2] +
+                                                                          [c_symbol] * random_counts[3]).tolist()))
 
     def quantify(self, scene):
         count = 0
@@ -383,22 +401,24 @@ class FirstN(Quantifier):
                     return False
             else:
                 return True
-                # this is an implementation of "only the first as are bs"
-                # if symbol is ab_symbol:
-                #     return False
         return True
 
 
-class OnlyFirstN(Quantifier):
+class ExactlyFirstN(Quantifier):
     def __init__(self, n):
         self._n = n
 
     def generate_scene(self, min_len=0, max_len=Quantifier.scene_len):
-        random_counts = self._random_generate_constant_sum(3, Quantifier.scene_len - 3,)[0]
+        while True:
+            random_counts = self._random_generate_constant_sum(len(symbols) - 1, Quantifier.scene_len - self._n)[0]
 
-        return self._random_interleave([ab_symbol] * self._n + [a_b_symbol] * random_counts[0],
-                                       np.random.permutation([b_a_symbol] * random_counts[1] +
-                                                             [c_symbol] * random_counts[2]))
+            # if this is not the required length regenerate the random numbers
+            if not (min_len <= Quantifier.scene_len - random_counts[-1] <= max_len):
+                continue
+
+            return np.array(self._random_interleave([ab_symbol] * self._n + [a_b_symbol] * random_counts[0],
+                                                    np.random.permutation([b_a_symbol] * random_counts[1] +
+                                                                          [c_symbol] * random_counts[2]).tolist()))
 
     def quantify(self, scene):
         count = 0

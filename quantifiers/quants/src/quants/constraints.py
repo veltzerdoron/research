@@ -1,4 +1,6 @@
 # scene symbols
+import copy
+
 ab_symbol = 0  # elements in A and in B (A&B)
 a_b_symbol = 1  # elements in A but not in B (A-B)
 b_a_symbol = 2  # elements in B but not in A (B-A)
@@ -28,7 +30,9 @@ class Constraint:
         reverses the constraint
         :return: reversed version of this constraint
         """
-        return self.__class__(self, reverse=not self._reverse)
+        clone = copy.deepcopy(self)
+        clone._reverse = not clone._reverse
+        return clone
 
     def comply(self, counts):
         """
@@ -103,4 +107,6 @@ class EvenConstraint(Constraint):
     """ Even constraint on a single symbol count """
 
     def comply(self, counts):
-        return self._reverse != (counts[self._symbol] % 2 == 0)
+        if self._symbol in counts:
+            return self._reverse != (counts[self._symbol] % 2 == 0)
+        return True
