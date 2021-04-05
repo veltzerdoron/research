@@ -4,8 +4,6 @@ import unittest
 
 from quants.quantifiers import *
 
-# TODO: test conjunction quantifiers
-
 quantifiers = [No(), The(), Both(), Few(), Some(), AFew(), Many(), Most(), All(), Not(Most()), N(3), ExactlyN(5),
                Between(5, 150), Between(2, 50), Between(8, 40), Between(12, 35), FirstN(3), ExactlyFirstN(5)]
 
@@ -32,6 +30,9 @@ class TestQuantifiers(unittest.TestCase):
 
         # do this for various scene length limits
         for scene_num, min_len, max_len in zip(*test_case_parameters):
+            # All quantifiers q entail not Not(q)
+            print("Running entailment tests for scene_num={scene_num} min_len={min_len} max_len={max_len}..."
+                  .format(scene_num=scene_num, min_len=min_len, max_len=max_len))
             # The entails Some
             assert(all([Some().quantify(scene) and not Not(The()).quantify(scene)
                         for scene in The().generate_scenes(scene_num, min_len, max_len)]))
@@ -41,11 +42,17 @@ class TestQuantifiers(unittest.TestCase):
             # AFew entails Some
             assert(all([Some().quantify(scene) and not Not(AFew()).quantify(scene)
                         for scene in AFew().generate_scenes(scene_num, min_len, max_len)]))
-            # Most entails Some
+            # Few entails some
+            assert(all([Some().quantify(scene) and not Not(Few()).quantify(scene)
+                        for scene in Few().generate_scenes(scene_num, min_len, max_len)]))
+            # Most entails some
             assert(all([Some().quantify(scene) and not Not(Most()).quantify(scene)
                         for scene in Most().generate_scenes(scene_num, min_len, max_len)]))
+            # Many entails Most
+            assert(all([Most().quantify(scene) and not Not(Many()).quantify(scene)
+                        for scene in Many().generate_scenes(scene_num, min_len, max_len)]))
             # All entails Most and Some
-            assert(all([Most().quantify(scene) and Some().quantify(scene)  # and not Not(All()).quantify(scene)
+            assert(all([Most().quantify(scene) and Some().quantify(scene) and not Not(All()).quantify(scene)
                         for scene in All().generate_scenes(scene_num, min_len, max_len)]))
             # Even entails not Odd
             assert(all([not Odd().quantify(scene) and not Not(Even()).quantify(scene)
@@ -61,6 +68,12 @@ class TestQuantifiers(unittest.TestCase):
             for n in [3, 5, 7]:
                 assert(all([N(n).quantify(scene)
                             for scene in ExactlyFirstN(n).generate_scenes(scene_num, min_len, max_len)]))
+            # test Or and And conjunctions using Between (Between(n1,n2) entails (n1 and not n2)==(not(n2 or not n1)))
+            for n1, n2 in zip([3, 5, 7], [7, 9, 20]):
+                assert(all([And([N(n1), Not(N(n2 + 1))]).quantify(scene)
+                            and
+                            Not(Or([(N(n2 + 1)), Not(N(n1))])).quantify(scene)
+                            for scene in Between(n1, n2).generate_scenes(scene_num, min_len, max_len)]))
 
 
 if __name__ == '__main__':

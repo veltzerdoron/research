@@ -8,6 +8,8 @@ c_symbol = 3  # irrelevant (don't care) padding elements
 
 symbols = [ab_symbol, a_b_symbol, b_a_symbol, c_symbol]
 
+num_symbols = len(symbols)
+
 
 class Constraint:
     """
@@ -61,7 +63,7 @@ class LinearRangeConstraint(Constraint):
 
     def comply(self, counts):
         if self._symbol in counts and self._restriction in counts:
-            return self._reverse != (counts[self._symbol] >=
+            return self._reverse != (counts[self._symbol] >
                                      self._alpha * counts[self._restriction])
         return True
 
@@ -73,7 +75,7 @@ class ConstantRangeConstraint(Constraint):
     symbol >= constant
     """
 
-    def __init__(self, restriction, *argv, **kwargs):
+    def __init__(self, restriction=0, *argv, **kwargs):
         """
         :param restriction: constant restriction on the constrained symbol counts
         """
@@ -82,7 +84,7 @@ class ConstantRangeConstraint(Constraint):
 
     def comply(self, counts):
         if self._symbol in counts:
-            return self._reverse != (counts[self._symbol] >= self._restriction)
+            return self._reverse != (counts[self._symbol] > self._restriction)
         return True
 
 

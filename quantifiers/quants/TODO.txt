@@ -1,32 +1,41 @@
-* finish reading CNN papers and set meeting with Ezer.
-* distinguish between classifiers according to monotonicity
-* finish perusing quantifier booklets and set meeting with Roni.
-* write weight analyzer in model class
+*** Finish quants and upload it to pypi
 
-Classfiers:
-    * Finish the softmax AE classifier class
-    * add testing evaluation results storage and exposure to user (add in tests)
+* work on model class hierarchy
+    * Finish the Dense AE classifier class and make its tests work
 
-*** Create quants python package and upload it to github / pypi as part of this research project
+Future improvements:
+    ** add testing evaluation results storage and exposure to user
+    ** add tests that check accuracy of results
+
+
 
 Done:
 
-Classifiers:
-* work on model class hierarchy
-    * Finish running AE class and tests
-    * generalize the AE and Classifier models
+Bugs-
+* The quantification entailment tests sometimes failed on "most" entails "some" edge cases,
+  caught and fixed (edge case was that most was defined as ab >= a_b instead of >)
 
-Quantifiers:
-* improved quantifiers classes
+Classifiers-
+* Fixed accuracies of multi-label classifier
+* Wrote multi-label classifier class
+* Thought about and ruled out weight analyzer in classifier class
+* wrote code for teacher student
+    leave repeat at 1 to neutralize
+
+Quantifiers-
+* added test for random scenes
+* added test for contrastive quantifier learning and made it pass
+* improved quantifier classes
     * multinomial distribution generation in fill and generation methods
     * multinomial selection of counts
     * quantifiers work according to constraints
     * natural and non natural quantifiers in hierarchy
-* keep quantifier order
-* min max scene len (add code option to generate limited lengths of scenes)
+    * unified all generate_scene methods under a single implementation with delegations
+* quantifiers kept in order
+* min max scene len (added code option to generate limited lengths of scenes for length generalization testing)
 
-* handle out of memory issue when running the package twice
+* handled out of memory issue when running the package twice
+
 * write package tests for Quantifiers and Classifier
 * code cleanup
-
-* installed package locally and start working with it
+* installed package locally and started working with it via notebook

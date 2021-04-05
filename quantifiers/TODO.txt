@@ -1,31 +1,45 @@
-STS:
-* do generalization and length tests for STS
-* reread V(Keenan), STS & V(Chemla) and Quantifier acquisition
-
 Urgent:
-* AE
-* do generalization tests on my models
-* read CNN biological plausibility papers
-* analysis of model weight values after training (Conv + Dense)
-    * understand how CNN learns unnatural quantifiers
+** understand how CNN learns unnatural quantifiers
+* play in the learnable quantifier space
+* write abstract for Rony
+* compare natural quantifier to general quantifiers learning (Most, Between)
+* compare every to close to every quantifiers learning (every2, every, exist)
+
+** check length generalization for STS
+
+
 
 Done:
-* CNN, DNN version of NN
+Read:
+* CNN biological Inspiration
+* Acquisition of semantics in the vision impaired
+* Quantifier literature
+* Mirror neurons
+* Free energy based networks
 
-*understand STS code + analysis
+3/21:
+* finished advanced tensor flow coursera course
+13/1/21:
+* fixed warning: UserWarning: labels size, 1, does not match size of target_names, 2 during training
+* read about softmax function
+* checked why my functional API CNN softmax classifier isn't running on pycharm (mixing tf and keras imports)
+* worked on abstract for Roni
 
-* confusion matrix metrics
-   Conv1D usage is not very efficient on GPU moved to CPU
-* fix CuDNN dll library versions to make the conv work with GPU:
+
+* CNN, DNN version of NN, AE
+* generalization tests on my models
+
+* analysis of model weight values after training (Conv + Dense)
+
+* understood STS code + analysis
+
+
+   Note: Conv1D usage is not very efficient on GPU moved to CPU
+* fixed CuDNN dll library versions to make the conv work with GPU:
     https://towardsdatascience.com/installing-tensorflow-gpu-in-ubuntu-20-04-4ee3ca4cb75d
-* compare natural quantifier to general quantifiers learning
-* added test for random scenes
-* wrote code for teacher student
-    This is a problematic method, leave repeat at 1 to neutralize
+* confusion matrix metrics
 * rewrote my models pdf
-* wrote abstract for Rony and get back in contact
 
 
 Future ideas:
-*** check if the classifier can learn non conservative quantifiers
 *** run this on random world/ general quantifier world/natural quantifier world to tease apart the effects of the world and that of the "computation cognitive bias".

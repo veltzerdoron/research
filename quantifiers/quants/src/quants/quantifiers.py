@@ -22,7 +22,7 @@ class Quantifier(metaclass=ABCMeta):
             arguments=','.join(["{key}={value}".format(key=key, value=value)
                                 for key, value in chain(self.__dict__.items(), kwargs.items())]))
 
-    # random methods
+    # generative methods
 
     @staticmethod
     def _random_interleave(a, b):
@@ -53,54 +53,8 @@ class Quantifier(metaclass=ABCMeta):
                         np.full([m, 1], s)])
         return np.diff(uv, axis=1).astype(int)
 
-    # generative methods
-
-    def generate_scene(self, min_len=0, max_len=scene_len):
-        """
-        Generate random scene directly via uniform distribution
-
-        :param min_len: minimal number of scene symbols (apart from the don't care symbols)
-        :param max_len: maximal number of scene symbols (apart from the don't care symbols)
-
-        :return: the generated scene (list of symbols)
-        """
-        assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
-
-        # Note: this is commented out, Multinomial doesn't cover all the possibilities of the counts simplex very well
-        # return np.random.permutation(
-        #     np.concatenate([np.random.choice(symbols[:3], min_len),
-        #                     np.random.choice(symbols, max_len - min_len),
-        #                     np.array([symbols[3]] * (Quantifier.scene_len - max_len))]))
-
-        while True:
-            random_counts = self._random_generate_constant_sum(len(symbols), Quantifier.scene_len)[0]
-
-            # if this is not the required length regenerate the random numbers
-            if min_len <= Quantifier.scene_len - random_counts[-1] <= max_len:
-                continue
-
-            # build the scene with the valid counts
-            scene = np.random.permutation(dict(*zip(symbols, random_counts)))
-            # sanity check that the scene we generated gives a quantifier true scene
-            assert (self.quantify(scene)), "{} == False".format(self.name(scene="quantifier generated"))
-
-    def generate_scenes(self, scene_num=scene_num, min_len=0, max_len=scene_len):
-        """
-        Generate scene_num scenes that gives a truth value under the quantifier,
-
-        :param scene_num: number of scenes to generate
-        :param min_len: minimal number of scene symbols (apart from the don't care symbols)
-        :param max_len: maximal number of scene symbols (apart from the don't care symbols)
-
-        :return: generated scenes
-        """
-        # return concatenated generated scenes to generate a matrix for training
-        scenes = [self.generate_scene(min_len, max_len)
-                  for _ in range(scene_num)]
-        return np.vstack(scenes)
-
     @staticmethod
-    def scene(counts, min_len=0, max_len=scene_len):
+    def _scene(counts, min_len=0, max_len=scene_len):
         """
         receives a count dictionary for each symbol and returns a random scene with
         ab count symbols marked 0 representing elements in A and B.
@@ -110,7 +64,7 @@ class Quantifier(metaclass=ABCMeta):
         first the symbols are put in order, generating a scene prototype
         then if required then the prototype is permuted to generate the final scene.
 
-        :param counts: the input counts
+        :param counts: the input counts used to generate the scene symbols
         :param min_len: minimal number of scene symbols (apart from the don't care symbols)
         :param max_len: maximal number of scene symbols (apart from the don't care symbols)
 
@@ -119,17 +73,120 @@ class Quantifier(metaclass=ABCMeta):
         # parameters sanity check
         assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
         assert (all([count >= 0 for count in counts.values()])), "Negative symbol count given"
-        assert (sum(counts.values()) == Quantifier.scene_len), "Symbol counts don't add up to scene length"
+        if sum(counts.values()) != Quantifier.scene_len:
+            assert (sum(counts.values()) == Quantifier.scene_len), "Symbol counts don't add up to scene length"
 
         # generate and return the permuted scene prototype
         prototype = np.concatenate([[int(symbol)] * counts[symbol]
                                     for symbol in symbols]).astype(int)
         return prototype
 
+    def _generate_scene_initial_check(self, counts):
+        pass
+
+    def _generate_scene_random_counts(self, counts, min_len, max_len):
+        """
+        Generates random counts given the already given counts and the length limits
+
+        :param counts: the input counts used to generate the scene symbols
+        :param min_len: minimal number of scene symbols (apart from the don't care symbols)
+        :param max_len: maximal number of scene symbols (apart from the don't care symbols)
+
+        :return: the generated random counts
+        """
+        if c_symbol in counts:
+            # if don't care symbol count already filled in then disregard length limits
+            return self._random_generate_constant_sum(len(symbols) - len(counts.keys()),
+                                                      Quantifier.scene_len - sum(counts.values()))[0]
+        else:
+            random_counts = self._random_generate_constant_sum(len(symbols) - len(counts.keys()),
+                                                               max_len - sum(counts.values()))[0]
+            random_counts[-1] += Quantifier.scene_len - max_len
+            return random_counts
+
+    def _generate_scene_builder(self, counts):
+        """
+        builds a scene from the given counts if possible, else returns None
+
+        :param counts: the input counts used to generate the scene symbols
+
+        :return: generated scene from counts if valid, else None
+        """
+        return np.random.permutation(dict(*zip(symbols, counts)))
+
+    def generate_scene(self, min_len=0, max_len=scene_len, counts=None):
+        """
+        Generate random scene directly via uniform distribution
+
+        :param counts: counts imposed on the target scenes (if given must comply with the quantifier's constraints)
+        :param min_len: minimal number of scene symbols (apart from the don't care symbols)
+        :param max_len: maximal number of scene symbols (apart from the don't care symbols)
+
+        :return: the generated scene (list of symbols)
+        """
+        assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
+
+        # Note: this alternative to random generation is commented out since:
+        # Multinomial doesn't cover all the possibilities of the counts simplex very well
+        # return np.random.permutation(
+        #     np.concatenate([np.random.choice(symbols[:3], min_len),
+        #                     np.random.choice(symbols, max_len - min_len),
+        #                     np.array([symbols[3]] * (Quantifier.scene_len - max_len))]))
+
+        if not counts:
+            counts = {}
+
+        if c_symbol in counts:
+            assert (min_len <= Quantifier.scene_len - counts[c_symbol] <= max_len), "Illegal don't care count given"
+
+        self._generate_scene_initial_check(counts)
+
+        assert (sum(counts.values()) <= max_len), "{name} has symbol counts limit ({max_len})".format(name=self.name(),
+                                                                                                      max_len=max_len)
+
+        # loop till we get counts that comply with the constraints
+        while True:
+            random_counts = self._generate_scene_random_counts(counts, min_len, max_len)
+
+            # if don't care count wasn't given and the generated value is not legal regenerate the random numbers
+            if c_symbol not in counts and not min_len <= Quantifier.scene_len - random_counts[-1] <= max_len:
+                continue
+
+            # fill in the counts with the random generated counts
+            filled_counts = counts.copy()
+            i = 0
+            for symbol in symbols:
+                if symbol not in counts:
+                    filled_counts[symbol] = random_counts[i]
+                    i += 1
+
+            # build the scene with the counts
+            scene = self._generate_scene_builder(filled_counts)
+            if scene is not None:
+                # sanity check that the scene we generated gives a quantifier true scene
+                assert (self.quantify(scene)), "{} == False".format(self.name(scene="quantifier generated"))
+                return scene
+
+    def generate_scenes(self, scene_num=scene_num, min_len=0, max_len=scene_len, counts=None):
+        """
+        Generate scene_num scenes that gives a truth value under the quantifier,
+
+        :param scene_num: number of scenes to generate
+        :param min_len: minimal number of scene symbols (apart from the don't care symbols)
+        :param max_len: maximal number of scene symbols (apart from the don't care symbols)
+        :param counts: counts imposed on the target scenes (if given must comply with the quantifier's constraints)
+
+        :return: generated scenes
+        """
+        # return concatenated generated scenes to generate a matrix for training
+        scenes = [self.generate_scene(min_len, max_len, counts)
+                  for _ in range(scene_num)]
+        return np.vstack(scenes)
+
     # scene quantification methods
 
     def quantify(self, scene):
-        # evaluate the scene under the quantifier
+        # evaluate the scene under the quantifier, return true by default
         return True
 
 
@@ -141,56 +198,24 @@ class QuantityQuantifier(Quantifier):
     by default constrains returns an empty list, inheriting classes need to return their specific constraints
     """
 
-    # generative methods
+    # scene generative methods
 
-    def generate_scene(self, min_len=0, max_len=Quantifier.scene_len):
-        """
-        generate a scene that gives a truth value under the quantifier, using the quantifier constraints
-
-        :param min_len: minimal number of scene symbols (all symbols apart from the don't care symbols)
-        :param max_len: maximal number of scene symbols (all symbols apart from the don't care symbols)
-
-        :return: the generated scene (list of symbols)
-        """
-        assert (0 <= min_len <= max_len <= Quantifier.scene_len), "Illegal scene length limits given"
-
-        counts = {}
-
+    def _generate_scene_initial_check(self, counts):
         # go over the constraints twice and see all constant constraints don't contradict
+        # NOTE: also fills in the constant constraint values
         for _ in range(2):
             for constraint in self.constraints():
                 if not constraint.comply(counts):
-                    raise ValueError("Incompatible constraints can't generate scene")
+                    if counts:
+                        raise ValueError("Constraints incompatible with initial counts, can't generate scene")
+                    raise ValueError("Constraints incompatible, can't generate scene")
 
-        basic_len = sum(counts.values())
-        assert (basic_len <= max_len), "quantifier has minimal symbols limit ({max_len})".format(max_len=max_len)
-
-        # TODO: go over constraints pairs to look for contradictions (otherwise the following loop might be infinite)
-        # loop till we get counts that comply with the constraints
-        while True:
-            random_counts = self._random_generate_constant_sum(len(symbols) - len(counts.keys()),
-                                                               Quantifier.scene_len - basic_len)[0]
-
-            # if this is not the required length regenerate the random numbers
-            if not (min_len <= Quantifier.scene_len - random_counts[-1] <= max_len):
-                continue
-
-            # fill in the counts with the random generated counts
-            filled_counts = counts.copy()
-            i = 0
-            for symbol in symbols:
-                if symbol not in counts:
-                    filled_counts[symbol] = random_counts[i]
-                    i += 1
-
-            # if scene counts comply with all quantifier constraints
-            if self.quantification(filled_counts):
-                # build the scene with the valid counts
-                scene = np.random.permutation(self.scene(filled_counts))
-                # sanity check that the scene we generated gives a quantifier true scene
-                assert (self.quantify(scene)), "{} == False".format(self.name(scene="quantifier generated"))
-                # return the generated scene
-                return scene
+    def _generate_scene_builder(self, counts):
+        # if scene counts comply with all quantifier constraints
+        if self.quantification(counts):
+            # build the scene with the valid counts
+            return np.random.permutation(self._scene(counts))
+        return None
 
     # scene quantification methods
 
@@ -225,56 +250,75 @@ class Many(QuantityQuantifier):
 
 class Few(QuantityQuantifier):
     def constraints(self):
-        # few as are bs means that there are less as that are bs than twice the as that are not bs
-        return [LinearRangeConstraint(symbol=a_b_symbol, restriction=ab_symbol, alpha=2)]
+        # few as are bs means that there are less as that are bs than twice as many as that are not bs
+        return [LinearRangeConstraint(symbol=a_b_symbol, restriction=ab_symbol, alpha=2),
+                ConstantRangeConstraint(symbol=ab_symbol)]
 
 
 class Only(QuantityQuantifier):
     def constraints(self):
         # only as are bs means that there are no bs that are not as (non conservative quantifier)
         # this is a non conservative constraint as it applies to bs who are not as symbols
-        return [ConstantConstraint(symbol=b_a_symbol, constant=0)]
+        return [ConstantConstraint(symbol=b_a_symbol)]
 
 
 class Some(QuantityQuantifier):
     def constraints(self):
-        # some as are bs means that more as are bs than 0 (>=1)
-        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=1)]
+        # some as are bs means that more as are bs than 0
+        return [ConstantRangeConstraint(symbol=ab_symbol)]
 
 
 class AFew(QuantityQuantifier):
     def constraints(self):
-        # a few as are bs means that more as are bs than 1 (>=2)
-        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=2)]
+        # a few as are bs means that are more than one as that are bs
+        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=1)]
 
 
 class No(QuantityQuantifier):
     def constraints(self):
-        # no as are bs means that no as are bs (==0)
-        # we also add the constraint that some as are not bs so that we have some as in the context (>=1)
+        # no as are bs means that, well... no as are bs (==0)
+        # we also add the constraint that some as are not bs so that we have some as in the context
         return [ConstantConstraint(symbol=ab_symbol),
-                ConstantRangeConstraint(symbol=a_b_symbol, restriction=1)]
+                ConstantRangeConstraint(symbol=a_b_symbol)]
 
 
 class All(QuantityQuantifier):  # also called Every
     def constraints(self):
         # all as are bs means that no as are not bs (==0)
-        # we also add the constraint that some as are bs so that we have some as in the context (>=1)
+        # we also add the constraint that some as are bs so that we have some as
         return [ConstantConstraint(symbol=a_b_symbol),
-                ConstantRangeConstraint(symbol=ab_symbol, restriction=1)]
+                ConstantRangeConstraint(symbol=ab_symbol)]
 
 
-class All2(QuantityQuantifier):  # also called Every
+class All2(QuantityQuantifier):  # also called Every2
     def constraints(self):
         # all2 as are bs means that no as are not bs (==0)
-        # we also add the constraint that some as are bs so that we have some as in the context (>=2)
+        # we also add the constraint that at least 2 as are bs
+        # for details see "Rasin 2020"
         return [ConstantConstraint(symbol=a_b_symbol),
                 ConstantRangeConstraint(symbol=ab_symbol, restriction=2)]
 
 
+class All_0(QuantityQuantifier):
+    # note: this is just for experiments, this is not a real quantifier
+    def constraints(self):
+        # all_0 as are bs means that no as are not bs (==0)
+        # we also add the constraint that no as are bs
+        return [ConstantConstraint(symbol=a_b_symbol),
+                ConstantConstraint(symbol=ab_symbol)]
+
+
+class All_1(QuantityQuantifier):
+    def constraints(self):
+        # all_1 as are bs means that no as are not bs (==0)
+        # we also add the constraint that 1 as are bs
+        return [ConstantConstraint(symbol=a_b_symbol),
+                ConstantConstraint(symbol=ab_symbol, constant=1)]
+
+
 class The(QuantityQuantifier):
     def constraints(self):
-        # the a is b means that there is exactly one a and it is also a b (no as that are not bs)
+        # the a is b means that there is exactly one a and it is also b (no as that are not bs)
         return [ConstantConstraint(symbol=ab_symbol, constant=1),
                 ConstantConstraint(symbol=a_b_symbol)]
 
@@ -292,7 +336,7 @@ class N(QuantityQuantifier):
 
     def constraints(self):
         # n as are bs means that there are at least n as that are bs
-        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._n)]
+        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._n - 1)]
 
 # compositional quantifier classes
 
@@ -356,8 +400,8 @@ class Between(QuantityQuantifier):
         self._max_a = max_a
 
     def constraints(self):
-        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._min_a),
-                ConstantRangeConstraint(symbol=ab_symbol, restriction=self._max_a + 1, reverse=True)]
+        return [ConstantRangeConstraint(symbol=ab_symbol, restriction=self._min_a - 1),
+                ConstantRangeConstraint(symbol=ab_symbol, restriction=self._max_a, reverse=True)]
 
 
 class Even(QuantityQuantifier):
@@ -376,18 +420,36 @@ class FirstN(Quantifier):
     def __init__(self, n):
         self._n = n
 
-    def generate_scene(self, min_len=0, max_len=Quantifier.scene_len):
-        while True:
-            random_counts = self._random_generate_constant_sum(len(symbols), Quantifier.scene_len)[0]
+    def _generate_scene_initial_check(self, counts):
+        # if ab_symbol set then make sure it is at least n
+        if ab_symbol in counts:
+            assert(counts[ab_symbol] >= self._n), "{name} requires at least {n} ab_symbols".format(name=self.name(),
+                                                                                                   n=self._n)
 
-            # if this is not the required length regenerate the random numbers
-            if not (min_len <= Quantifier.scene_len - random_counts[-1] <= max_len):
-                continue
+    def _generate_scene_random_counts(self, counts, min_len, max_len):
+        # if ab_symbol set then return counts as is
+        if ab_symbol in counts:
+            return super()._generate_scene_random_counts(counts, min_len, max_len)
+        # otherwise return the counts plus n to the ab_symbol count
+        if c_symbol in counts:
+            random_counts = self._random_generate_constant_sum(len(symbols) - len(counts),
+                                                               Quantifier.scene_len - sum(counts) - self._n)[0]
+            random_counts[0] += self._n
+            return random_counts
+        else:
+            random_counts = self._random_generate_constant_sum(len(symbols) - len(counts),
+                                                               max_len - sum(counts) - self._n)[0]
+            random_counts[0] += self._n
+            random_counts[-1] += Quantifier.scene_len - max_len
+            return random_counts
 
-            return np.array(self._random_interleave([ab_symbol] * (self._n + random_counts[0]) +
-                                                    [a_b_symbol] * random_counts[1],
-                                                    np.random.permutation([b_a_symbol] * random_counts[2] +
-                                                                          [c_symbol] * random_counts[3]).tolist()))
+    def _generate_scene_builder(self, counts):
+        return np.array(self._random_interleave(
+            [ab_symbol] * self._n + self._random_interleave([ab_symbol] * (counts[ab_symbol] - self._n),
+                                                            [a_b_symbol] * counts[a_b_symbol]),
+            np.random.permutation([b_a_symbol] * counts[b_a_symbol]
+                                  + [c_symbol] * counts[c_symbol]).tolist())
+        ).astype(int)
 
     def quantify(self, scene):
         count = 0
@@ -395,7 +457,7 @@ class FirstN(Quantifier):
             if symbol in [c_symbol, b_a_symbol]:
                 continue
             if count < self._n:
-                if symbol is ab_symbol:
+                if symbol == ab_symbol:
                     count += 1
                 else:
                     return False
@@ -404,21 +466,12 @@ class FirstN(Quantifier):
         return True
 
 
-class ExactlyFirstN(Quantifier):
-    def __init__(self, n):
-        self._n = n
-
-    def generate_scene(self, min_len=0, max_len=Quantifier.scene_len):
-        while True:
-            random_counts = self._random_generate_constant_sum(len(symbols) - 1, Quantifier.scene_len - self._n)[0]
-
-            # if this is not the required length regenerate the random numbers
-            if not (min_len <= Quantifier.scene_len - random_counts[-1] <= max_len):
-                continue
-
-            return np.array(self._random_interleave([ab_symbol] * self._n + [a_b_symbol] * random_counts[0],
-                                                    np.random.permutation([b_a_symbol] * random_counts[1] +
-                                                                          [c_symbol] * random_counts[2]).tolist()))
+class ExactlyFirstN(FirstN):
+    def _generate_scene_initial_check(self, counts):
+        if ab_symbol in counts:
+            assert(counts[ab_symbol] == self._n), "{name} requires exactly {n} ab_symbols".format(name=self.name(),
+                                                                                                  n=self._n)
+        counts[ab_symbol] = self._n
 
     def quantify(self, scene):
         count = 0
@@ -426,11 +479,11 @@ class ExactlyFirstN(Quantifier):
             if symbol in [c_symbol, b_a_symbol]:
                 continue
             if count < self._n:
-                if symbol is ab_symbol:
+                if symbol == ab_symbol:
                     count += 1
                 else:
                     return False
             else:
-                if symbol is ab_symbol:
+                if symbol == ab_symbol:
                     return False
         return True
