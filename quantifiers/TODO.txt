@@ -1,21 +1,25 @@
-Urgent:
-** understand how CNN learns unnatural quantifiers
-* play in the learnable quantifier space
-* write abstract for Rony
+TODO:
+
+Experiment related questions: (play in the learnable quantifier space)
+- Why does all not generalize perfectly to length *
+- Understand how classifier learns unnatural quantifiers ** 
+
 * compare natural quantifier to general quantifiers learning (Most, Between)
 * compare every to close to every quantifiers learning (every2, every, exist)
 
 ** check length generalization for STS
 
-
-
 Done:
+-------------------------------------------------
 Read:
 * CNN biological Inspiration
 * Acquisition of semantics in the vision impaired
 * Quantifier literature
 * Mirror neurons
 * Free energy based networks
+
+* wrote abstract for Rony
+
 
 3/21:
 * finished advanced tensor flow coursera course
