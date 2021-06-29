@@ -1,0 +1,8 @@
+Hebrew word embedding folder:
+* improve model (wait for it)
+* use doc2vec so as not to rely on BOW?
+
+Done:
+* implemented GMatrix methods
+* wrote 2 word and n word BF search
+* found all sub group words (from given set) with constant known sum (perfect sum)
