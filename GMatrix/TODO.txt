@@ -1,6 +1,7 @@
 Hebrew word embedding folder:
-* improve model (wait for it)
+* improve model (wait for better w2v model to arrive or maybe bert?!)
 * use doc2vec so as not to rely on BOW?
+* use language model or bert to limit the search space of possible n tokens (brute force is NPC)
 
 Done:
 * implemented GMatrix methods
