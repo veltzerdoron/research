@@ -125,7 +125,7 @@ tblib==1.7.0
 tensorboard==2.5.0
 tensorflow==2.5.0
 tensorflow-estimator==2.5.0
-tensorflow-gpu==2.5.0
+tensorflow-gpu==2.6.4
 termcolor==1.1.0
 terminado==0.8.3
 testpath==0.4.4
