@@ -123,7 +123,7 @@ statsmodels==0.12.1
 suod==0.0.4
 tblib==1.7.0
 tensorboard==2.5.0
-tensorflow==2.5.0
+tensorflow==2.7.2
 tensorflow-estimator==2.5.0
 tensorflow-gpu==2.5.0
 termcolor==1.1.0
